@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Self-Healing Storage Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; max-width: 900px; }
+    h1 { margin-bottom: 0.2rem; }
+    h2 { margin-top: 2rem; }
+    label { display: block; margin-top: 0.5rem; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 6px; margin-top: 0.25rem; }
+    textarea { height: 80px; }
+    button.btn { padding: 6px 12px; margin-top: 0.5rem; cursor: pointer; }
+    pre { background: #111; color: #eee; padding: 8px; font-size: 12px; overflow: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 13px; }
+    th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+    th { background: #f3f3f3; }
+    .status-ok { color: #0a0; font-weight: 600; }
+    .status-restored { color: #c60; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Self-Healing Storage Console</h1>
+  <p>Use this page to upload files, simulate deletions, trigger verification, and inspect object status & audit logs.</p>
+
+  <!-- Upload -->
+  <h2>Upload Test File</h2>
+  <label>File name in primary bucket:
+    <input id="upload-key" placeholder="example.txt">
+  </label>
+  <label>File content:
+    <textarea id="upload-content">Sample test content</textarea>
+  </label>
+  <button class="btn" onclick="upload()">Upload to Primary</button>
+  <pre id="upload-result"></pre>
+
+  <!-- Delete -->
+  <h2>Delete File from Primary (simulate loss)</h2>
+  <label>File name to delete from primary:
+    <input id="delete-key" placeholder="example.txt">
+  </label>
+  <button class="btn" onclick="deleteFile()">Delete from Primary</button>
+  <pre id="delete-result"></pre>
+
+  <!-- Verify -->
+  <h2>Run Verification & Healing</h2>
+  <button class="btn" onclick="runVerify()">Run Verify Lambda</button>
+  <pre id="verify-result"></pre>
+
+  <!-- Objects -->
+  <h2>Object Catalog (DynamoDB)</h2>
+  <button class="btn" onclick="loadObjects()">Refresh Objects</button>
+  <table id="objects-table">
+    <thead>
+      <tr>
+        <th>Key</th>
+        <th>VersionId</th>
+        <th>Last Status</th>
+        <th>Last Verified</th>
+        <th>Size</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Audits -->
+  <h2>Audit Logs for a File</h2>
+  <label>File name:
+    <input id="audit-key" placeholder="audit.txt">
+  </label>
+  <button class="btn" onclick="loadAudits()">Load Audits</button>
+  <pre id="audit-result"></pre>
+
+<script>
+  const API_BASE = 'https://d6h1h2ejei.execute-api.us-west-2.amazonaws.com';
+
+  async function upload() {
+    const key = document.getElementById('upload-key').value.trim();
+    const content = document.getElementById('upload-content').value;
+    if (!key) { alert('Enter a file name'); return; }
+
+    const body = {
+      key,
+      content: btoa(content) // base64 encode
+    };
+
+    try {
+      const res = await fetch(API_BASE + '/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      document.getElementById('upload-result').textContent =
+        JSON.stringify(data, null, 2);
+    } catch (e) {
+      document.getElementById('upload-result').textContent =
+        'Error: ' + e;
+    }
+  }
+
+  async function deleteFile() {
+    const key = document.getElementById('delete-key').value.trim();
+    if (!key) { alert('Enter a file name'); return; }
+
+    try {
+      const res = await fetch(API_BASE + '/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      document.getElementById('delete-result').textContent =
+        JSON.stringify(data, null, 2);
+    } catch (e) {
+      document.getElementById('delete-result').textContent =
+        'Error: ' + e;
+    }
+  }
+
+  async function runVerify() {
+    try {
+      const res = await fetch(API_BASE + '/verify', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('verify-result').textContent =
+        JSON.stringify(data, null, 2);
+    } catch (e) {
+      document.getElementById('verify-result').textContent =
+        'Error: ' + e;
+    }
+  }
+
+  async function loadObjects() {
+    try {
+      const res = await fetch(API_BASE + '/objects');
+      const data = await res.json();
+      const tbody = document.querySelector('#objects-table tbody');
+      tbody.innerHTML = '';
+
+      (data.objects || []).forEach(obj => {
+        const tr = document.createElement('tr');
+        const status = (obj.lastStatus || '').toUpperCase();
+        let statusClass = '';
+        if (status === 'OK') statusClass = 'status-ok';
+        if (status === 'RESTORED_FROM_REPLICA') statusClass = 'status-restored';
+
+        tr.innerHTML = `
+          <td>${obj.key}</td>
+          <td>${obj.versionId || ''}</td>
+          <td class="${statusClass}">${obj.lastStatus || ''}</td>
+          <td>${obj.lastVerified || ''}</td>
+          <td>${obj.size || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      alert('Error loading objects: ' + e);
+    }
+  }
+
+  async function loadAudits() {
+    const key = document.getElementById('audit-key').value.trim();
+    if (!key) { alert('Enter a file name'); return; }
+
+    try {
+      const res = await fetch(API_BASE + '/audits?key=' + encodeURIComponent(key));
+      const data = await res.json();
+      document.getElementById('audit-result').textContent =
+        JSON.stringify(data, null, 2);
+    } catch (e) {
+      document.getElementById('audit-result').textContent =
+        'Error: ' + e;
+    }
+  }
+</script>
+</body>
+</html>
+
