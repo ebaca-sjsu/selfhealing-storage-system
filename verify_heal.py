@@ -5,7 +5,7 @@ import datetime
 import os
 from botocore.exceptions import ClientError
 
-# --- Configuration from environment ---
+# Configuration from environment
 REGION = os.environ.get("AWS_REGION", "us-west-2")
 PRIMARY_BUCKET = os.environ.get("PRIMARY_BUCKET")
 REPLICA_BUCKET = os.environ.get("REPLICA_BUCKET")
@@ -17,7 +17,7 @@ dynamodb = boto3.resource("dynamodb", region_name=REGION)
 table = dynamodb.Table(DDB_TABLE)
 
 
-# ---------- Helpers ----------
+# Helpers Functions
 
 def sha256_for_body(body_bytes: bytes) -> str:
     """Compute hex SHA256 for a bytes buffer."""
@@ -51,7 +51,7 @@ def is_not_found_error(err: ClientError) -> bool:
     return code in ("NoSuchKey", "NotFound", "404")
 
 
-# ---------- Lambda entrypoint ----------
+# Lambda entry
 
 def lambda_handler(event, context):
     print("Verify event:", json.dumps(event))
@@ -72,7 +72,7 @@ def lambda_handler(event, context):
 
         now = datetime.datetime.utcnow().isoformat() + "Z"
 
-        # ---- Case 0: malformed row ----
+        # Case 0: bad row
         if not key:
             print(f"[VERIFY] Skipping item with missing key pk={pk} sk={sk}")
             write_audit(
@@ -90,7 +90,7 @@ def lambda_handler(event, context):
             processed += 1
             continue
 
-        # ---- Case 1: try to read from PRIMARY ----
+        # Case 1: try to read from PRIMARY
         try:
             obj = s3.get_object(Bucket=primary_bucket, Key=key)
             body = obj["Body"].read()
@@ -148,7 +148,7 @@ def lambda_handler(event, context):
                     processed += 1
                     continue
 
-            # If we got here, object exists and checksum is fine (or not provided)
+            # If we got here, object exists and checksum is fine
             status = "OK"
             table.update_item(
                 Key={"pk": pk, "sk": sk},
@@ -160,7 +160,7 @@ def lambda_handler(event, context):
             continue
 
         except ClientError as e:
-            # ---- Case 2: error reading from PRIMARY ----
+            # Case 2: error reading from PRIMARY
             if is_not_found_error(e):
                 print(f"[VERIFY] {key} missing from primary, attempting restore")
                 try:

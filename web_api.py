@@ -6,10 +6,10 @@ import os
 from decimal import Decimal
 from botocore.exceptions import ClientError
 
-# --- Environment variables ---
+# Environment variables
 REGION = os.environ.get("AWS_REGION", "us-west-2")
 PRIMARY_BUCKET = os.environ.get("PRIMARY_BUCKET")
-REPLICA_BUCKET = os.environ.get("REPLICA_BUCKET")  # ok if unused here
+REPLICA_BUCKET = os.environ.get("REPLICA_BUCKET") 
 AUDIT_BUCKET = os.environ.get("AUDIT_BUCKET")
 DDB_TABLE = os.environ.get("DDB_TABLE")
 VERIFY_FUNC = os.environ.get("VERIFY_FUNC")
@@ -19,10 +19,6 @@ table = dynamodb.Table(DDB_TABLE)
 s3 = boto3.client("s3", region_name=REGION)
 lambda_client = boto3.client("lambda", region_name=REGION)
 
-
-# -------------------------
-# Helpers
-# -------------------------
 
 def _json_default(o):
     if isinstance(o, Decimal):
@@ -76,10 +72,6 @@ def _parse_body(event):
         return {k: v[0] for k, v in qs.items()}
 
 
-# -------------------------
-# Endpoints
-# -------------------------
-
 def list_objects():
     """Deduplicate by key, return latest version entry."""
     scan = table.scan()
@@ -131,7 +123,7 @@ def upload_object(event):
     if not key or content_b64 is None:
         return response(400, {"error": "Both 'key' and 'content' are required."})
 
-    # Decode base64 safely
+    # Decode
     try:
         data = base64.b64decode(content_b64.encode("utf-8"))
     except Exception as e:
@@ -159,7 +151,7 @@ def upload_object(event):
             },
         )
     except Exception as e:
-        # This will catch ParamValidationError and anything else
+        # This will catch ParamValidationError 
         return response(
             500,
             {
@@ -356,11 +348,6 @@ def get_file_content(event):
 
     return response(200, result)
 
-
-# -------------------------
-# Router
-# -------------------------
-
 def lambda_handler(event, context):
     # Safe logging
     try:
@@ -380,7 +367,7 @@ def lambda_handler(event, context):
         method = event.get("httpMethod")
         path = event.get("path")
 
-    # OPTIONS → CORS preflight
+    # OPTIONS CORS 
     if (method or "").upper() == "OPTIONS":
         return {
             "statusCode": 200,
