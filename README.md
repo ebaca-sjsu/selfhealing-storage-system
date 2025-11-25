@@ -39,7 +39,8 @@ In the UI you can:
 - Delete files (simulate corruption)  
 - Run Verify (auto-heals files)  
 - Refresh object catalog  
-- Load audit logs  
+- Load audit logs
+- Read file contents
 
 
 Example audit entry:
