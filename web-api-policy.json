@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Effect": "Allow",
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Action": [
+        "dynamodb:Scan",
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:dynamodb:us-west-2:YOUR_ACCOUNT_ID:table/selfhealing-object-catalog"
+    },
+    {
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::selfhealing-primary-dev",
+        "arn:aws:s3:::selfhealing-primary-dev/*",
+        "arn:aws:s3:::selfhealing-audit-dev",
+        "arn:aws:s3:::selfhealing-audit-dev/*"
+      ]
+    },
+    {
+      "Action": ["lambda:InvokeFunction"],
+      "Effect": "Allow",
+      "Resource": "arn:aws:lambda:us-west-2:289997608325:function:selfhealing-verify-heal"
+    }
+  ]
+}
+

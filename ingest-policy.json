@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IngestReadWritePrimaryReplica",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::selfhealing-primary-dev/*",
+        "arn:aws:s3:::selfhealing-replica-dev/*"
+      ]
+    },
+    {
+      "Sid": "IngestWriteDynamo",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": "arn:aws:dynamodb:us-west-2:289997608325:table/selfhealing-object-catalog"
+    }
+  ]
+}

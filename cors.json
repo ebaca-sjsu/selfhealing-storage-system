@@ -1,5 +1,8 @@
 {
   "AllowOrigins": ["*"],
   "AllowMethods": ["GET", "POST", "OPTIONS"],
-  "AllowHeaders": ["*"]
+  "AllowHeaders": ["*"],
+  "ExposeHeaders": ["*"],
+  "MaxAge": 86400
 }
+

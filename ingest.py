@@ -3,14 +3,17 @@ import boto3
 import hashlib
 import datetime
 import urllib.parse
+import os
 from botocore.exceptions import ClientError
 
-s3 = boto3.client("s3")
-dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table("selfhealing-object-catalog")
+REGION = os.environ.get("AWS_REGION", "us-west-2")
+PRIMARY_BUCKET = os.environ.get("PRIMARY_BUCKET")
+REPLICA_BUCKET = os.environ.get("REPLICA_BUCKET")
+DDB_TABLE = os.environ.get("DDB_TABLE")
 
-PRIMARY_BUCKET = "selfhealing-primary-dev"
-REPLICA_BUCKET = "selfhealing-replica-dev"
+s3 = boto3.client("s3", region_name=REGION)
+dynamodb = boto3.resource("dynamodb", region_name=REGION)
+table = dynamodb.Table(DDB_TABLE)
 
 
 def sha256_for_body(body_bytes):
@@ -20,64 +23,49 @@ def sha256_for_body(body_bytes):
 
 
 def lambda_handler(event, context):
-    """
-    Triggered by S3:ObjectCreated events on the primary bucket.
-    For each new/updated object:
-      - compute checksum & size
-      - copy the object to the replica bucket
-      - store catalog entry in DynamoDB using the REPLICA versionId
-        if available, otherwise use 'latest'.
-    """
-    now = datetime.datetime.utcnow().isoformat() + "Z"
+    print("Ingest event:", json.dumps(event))
+
     processed = 0
+    now = datetime.datetime.utcnow().isoformat() + "Z"
 
     for record in event.get("Records", []):
-        s3_info = record.get("s3", {})
-        bucket = s3_info.get("bucket", {}).get("name")
-        key = urllib.parse.unquote_plus(
-            s3_info.get("object", {}).get("key", "")
-        )
-
-        if not bucket or not key:
-            continue
-
-        # Only handle events for the primary bucket
-        if bucket != PRIMARY_BUCKET:
-            continue
-
         try:
-            # Get object body from primary
-            obj = s3.get_object(Bucket=bucket, Key=key)
+            bucket = record["s3"]["bucket"]["name"]
+            key = urllib.parse.unquote_plus(record["s3"]["object"]["key"])
+            version_id = record["s3"]["object"].get("versionId")
+
+            get_args = {"Bucket": bucket, "Key": key}
+            if version_id:
+                get_args["VersionId"] = version_id
+
+            obj = s3.get_object(**get_args)
             body = obj["Body"].read()
             checksum = sha256_for_body(body)
-            size = len(body)
+            size = obj.get("ContentLength", len(body))
 
-            # Copy to replica bucket
+            # Copy to replica
             copy_source = {"Bucket": bucket, "Key": key}
-            copy_resp = s3.copy_object(
+            if version_id:
+                copy_source["VersionId"] = version_id
+
+            s3.copy_object(
                 Bucket=REPLICA_BUCKET,
                 Key=key,
                 CopySource=copy_source,
             )
 
-            # IMPORTANT:
-            # Only trust the replica VersionId. If replica is not versioned,
-            # this will be None and we just treat it as "latest".
-            replica_version_id = copy_resp.get("VersionId")
-            version_id = replica_version_id or "latest"
-
-            pk = f"{bucket}/{key}"
-            sk = f"v#{version_id}"
+            pk = f"{PRIMARY_BUCKET}/{key}"
+            sk = "meta"
 
             item = {
                 "pk": pk,
                 "sk": sk,
-                "bucket": bucket,
                 "key": key,
-                "checksum": checksum,
-                "size": size,
                 "versionId": version_id,
+                "primaryBucket": PRIMARY_BUCKET,
                 "replicaBucket": REPLICA_BUCKET,
+                "size": str(size),
+                "checksum": checksum,
                 "lastStatus": "OK",
                 "lastVerified": now,
             }
@@ -86,8 +74,7 @@ def lambda_handler(event, context):
             processed += 1
 
         except ClientError as e:
-            # Log but don't crash the whole batch
-            print(f"Error ingesting {bucket}/{key}: {e}")
+            print(f"Error ingesting {record}: {e}")
 
     return {"status": "ok", "processed": processed}
 

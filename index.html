@@ -21,7 +21,7 @@
 </head>
 <body>
   <h1>Self-Healing Storage Console</h1>
-  <p>Use this page to upload files, simulate deletions, trigger verification, and inspect object status & audit logs.</p>
+  <p>Upload files, simulate deletions, trigger verification, and inspect object status & audit logs.</p>
 
   <!-- Upload -->
   <h2>Upload Test File</h2>
@@ -66,12 +66,21 @@
   <!-- Audits -->
   <h2>Audit Logs for a File</h2>
   <label>File name:
-    <input id="audit-key" placeholder="audit.txt">
+    <input id="audit-key" placeholder="example.txt">
   </label>
   <button class="btn" onclick="loadAudits()">Load Audits</button>
   <pre id="audit-result"></pre>
 
+  <!-- Read File -->
+  <h2>Read File Contents (from Primary)</h2>
+  <label>File name:
+    <input id="read-key" placeholder="example.txt">
+  </label>
+  <button class="btn" onclick="readFile()">Read File</button>
+  <pre id="read-result"></pre>
+
 <script>
+  // Set this to your HTTP API endpoint:
   const API_BASE = 'https://d6h1h2ejei.execute-api.us-west-2.amazonaws.com';
 
   async function upload() {
@@ -87,7 +96,7 @@
     try {
       const res = await fetch(API_BASE + '/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // no Content-Type header → avoid CORS preflight
         body: JSON.stringify(body)
       });
       const data = await res.json();
@@ -106,7 +115,6 @@
     try {
       const res = await fetch(API_BASE + '/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key })
       });
       const data = await res.json();
@@ -170,6 +178,29 @@
     } catch (e) {
       document.getElementById('audit-result').textContent =
         'Error: ' + e;
+    }
+  }
+
+  async function readFile() {
+    const key = document.getElementById('read-key').value.trim();
+    if (!key) { alert('Enter a file name'); return; }
+
+    try {
+      const res = await fetch(API_BASE + '/file?key=' + encodeURIComponent(key));
+      const data = await res.json();
+
+      let out;
+      if (data.encoding === 'utf-8' && typeof data.text === 'string') {
+        out = data.text;
+      } else if (data.encoding === 'base64') {
+        out = '[binary file, base64 length ' + (data.contentBase64 || '').length + ']';
+      } else {
+        out = JSON.stringify(data, null, 2);
+      }
+
+      document.getElementById('read-result').textContent = out;
+    } catch (e) {
+      document.getElementById('read-result').textContent = 'Error: ' + e;
     }
   }
 </script>
